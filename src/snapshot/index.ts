@@ -1,4 +1,3 @@
-import * as fs from "fs";
 import {SnapshotInfo, SnapshotInfoNode} from "./snapshotInfo";
 import {SnapshotEdgeTypes, SnapshotNodeTypes} from "./snapshotTypes";
 
@@ -63,3 +62,5 @@ export class Snapshot {
     return size;
   }
 }
+
+export default Snapshot
