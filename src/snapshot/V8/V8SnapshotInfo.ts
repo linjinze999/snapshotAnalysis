@@ -20,8 +20,21 @@ enum V8SnapshotInfoEdgeFields {
     from_node = "from_node"
 }
 
-export type V8SnapshotInfoNode = Record<V8SnapshotNodeFields | V8SnapshotInfoNodeFields, number | string>;
-export type V8SnapshotInfoEdge = Record<V8SnapshotEdgeFields | V8SnapshotInfoEdgeFields, number | string>;
+export type V8SnapshotInfoNode = Record<V8SnapshotNodeFields | V8SnapshotInfoNodeFields, number | string> & {
+    [V8SnapshotNodeFields.id]: number,
+    [V8SnapshotNodeFields.name]: string,
+    [V8SnapshotNodeFields.type]: V8SnapshotNodeTypes,
+    [V8SnapshotNodeFields.self_size]: number,
+    [V8SnapshotInfoNodeFields.retained_size]: number,
+    [V8SnapshotInfoNodeFields.distance]: number,
+    [V8SnapshotInfoNodeFields.flag]: number,
+};
+export type V8SnapshotInfoEdge = Record<V8SnapshotEdgeFields | V8SnapshotInfoEdgeFields, number | string> & {
+    [V8SnapshotEdgeFields.type]: V8SnapshotEdgeTypes,
+    [V8SnapshotEdgeFields.name_or_index]: string,
+    [V8SnapshotEdgeFields.to_node]: number,
+    [V8SnapshotInfoEdgeFields.from_node]: number
+};
 
 // V8Snapshot基础信息
 export class V8SnapshotInfo {
@@ -94,7 +107,7 @@ export class V8SnapshotInfo {
         for (let i = 0; i < node_count; ++i) {
             node = this.getNode(i * this.node_field_count);
             this.node_list.push(node);
-            this.nodes[node.id as number] = node;
+            this.nodes[node.id] = node;
         }
     }
 
@@ -108,17 +121,17 @@ export class V8SnapshotInfo {
         };
         for (let i = 0; i < this.node_field_count; ++i) {
             // todo name: concatenated string
-            node[node_field[i]] = this.getNodeField(node_start, i);
+            (node[node_field[i]] as string | number) = (this.getNodeField(node_start, i));
         }
         node.retained_size = node.self_size;
-        if (node.type === V8SnapshotNodeTypes.native && (node.name as string).startsWith('Detached ')) {
-            (node.flag as number) |= V8SnapshotInfo.NODE_FLAGS.detachedDOMTreeNode;
+        if (node.type === V8SnapshotNodeTypes.native && (node.name).startsWith('Detached ')) {
+            (node.flag) |= V8SnapshotInfo.NODE_FLAGS.detachedDOMTreeNode;
         }
         return node as V8SnapshotInfoNode;
     }
 
     // 获取node某个field值
-    getNodeField = (node_start: number, node_field_idx: number) => {
+    getNodeField = (node_start: number, node_field_idx: number): number | string => {
         const value = this.heap.nodes[node_start + node_field_idx];
         const type = this.heap.snapshot.meta.node_types[node_field_idx];
         if (type === V8SnapshotNodeTypes.string) return this.heap.strings[value];
@@ -133,9 +146,9 @@ export class V8SnapshotInfo {
         let edge: V8SnapshotInfoEdge;
         let from_node_id: number;
         this.node_list.forEach(node => {
-            from_node_id = node.id as number;
+            from_node_id = node.id;
             for (let j = 0; j < node.edge_count; ++j) {
-                edge = this.getEdge(edge_start, from_node_id) as V8SnapshotInfoEdge;
+                edge = this.getEdge(edge_start, from_node_id);
                 // edge list
                 this.edge_list.push(edge);
                 // edge from map
@@ -156,13 +169,13 @@ export class V8SnapshotInfo {
             from_node
         };
         for (let i = 0; i < this.edge_fields_count; ++i) {
-            edge[edge_field[i]] = this.getEdgeField(edge_start, i);
+            (edge[edge_field[i]] as string | number) = this.getEdgeField(edge_start, i);
         }
         return edge as V8SnapshotInfoEdge;
     }
 
     // 获取edge的field
-    getEdgeField = (edge_start: number, field_index: number) => {
+    getEdgeField = (edge_start: number, field_index: number): string | number => {
         const value = this.heap.edges[edge_start + field_index];
         const type = this.heap.snapshot.meta.edge_types[field_index];
         if (type === V8SnapshotEdgeTypes.string_or_number) {
@@ -183,7 +196,7 @@ export class V8SnapshotInfo {
         for (let postOrderIndex = 0; postOrderIndex < nodeCount - 1; ++postOrderIndex) {
             const nodeId = this.postOrderIndex2NodeId[postOrderIndex];
             const dominatorNodeId = dominatorsTree[nodeId];
-            (this.nodes[dominatorNodeId].retained_size as number) += (this.nodes[nodeId].retained_size as number);
+            (this.nodes[dominatorNodeId].retained_size) += (this.nodes[nodeId].retained_size);
         }
     }
 
@@ -223,7 +236,7 @@ export class V8SnapshotInfo {
                     || !this.nodesDistanceFilter(node_to, edge)){
                     return;
                 }
-                node_to.distance = (node.distance as number) + 1;
+                node_to.distance = (node.distance) + 1;
                 nodesToVisit[nodesToVisitLength++] = node_to;
             })
         }
@@ -238,7 +251,7 @@ export class V8SnapshotInfo {
             if (node.name !== '(map descriptors)') {
                 return true;
             }
-            const index = parseInt(edge.name_or_index as string, 10);
+            const index = parseInt(edge.name_or_index, 10);
             return index < 2 || (index % 3) !== 1;
         }
         return true;
@@ -256,12 +269,12 @@ export class V8SnapshotInfo {
             if(edge.type === V8SnapshotEdgeTypes.element){
                 // isDocumentDOMTreesRoot
                 if(this.nodes[edge.to_node]?.type === V8SnapshotNodeTypes.synthetic && this.nodes[edge.to_node].name === "(Document DOM trees)"){
-                    (this.nodes[edge.to_node].flag as number) |= flag;
-                    this.markPageOwnedNodesByNodeId(edge.to_node as number, flag);
+                    (this.nodes[edge.to_node].flag) |= flag;
+                    this.markPageOwnedNodesByNodeId(edge.to_node, flag);
                 }
             } else if (edge.type === V8SnapshotEdgeTypes.shortcut){
-                (this.nodes[edge.to_node].flag as number) |= flag;
-                this.markPageOwnedNodesByNodeId(edge.to_node as number, flag);
+                (this.nodes[edge.to_node].flag) |= flag;
+                this.markPageOwnedNodesByNodeId(edge.to_node, flag);
             }
         });
     }
@@ -270,14 +283,14 @@ export class V8SnapshotInfo {
     private markPageOwnedNodesByNodeId(nodeId: number, flag: number){
         this.edges[nodeId]?.forEach(edge => {
             const node_to = this.nodes[edge.to_node];
-            if ((node_to.flag as number) & flag) {
+            if ((node_to.flag) & flag) {
                 return;
             }
             if(edge.type === V8SnapshotEdgeTypes.weak){
                 return;
             }
-            (node_to.flag as number) |= flag;
-            this.markPageOwnedNodesByNodeId(edge.to_node as number, flag);
+            (node_to.flag) |= flag;
+            this.markPageOwnedNodesByNodeId(edge.to_node, flag);
         });
     }
 
@@ -301,7 +314,7 @@ export class V8SnapshotInfo {
                 const node = this.nodes[stackNodes[stackTop]];
                 hasNew = false;
                 this.edges[node.id]?.forEach(edge => {
-                    if (!this.isEssentialEdge(node.id as number, edge.type as V8SnapshotEdgeTypes)) {
+                    if (!this.isEssentialEdge(node.id, edge.type)) {
                         return;
                     }
                     const childNode = this.nodes[edge.to_node];
@@ -309,19 +322,19 @@ export class V8SnapshotInfo {
                         return;
                     }
                     if(node.id !== this.root_id &&
-                      ((childNode.flag as number) & V8SnapshotInfo.NODE_FLAGS.pageObject) &&
-                      !((node.flag as number) & V8SnapshotInfo.NODE_FLAGS.pageObject)){
+                      ((childNode.flag) & V8SnapshotInfo.NODE_FLAGS.pageObject) &&
+                      !((node.flag) & V8SnapshotInfo.NODE_FLAGS.pageObject)){
                         return;
                     }
                     hasNew = true;
                     ++stackTop;
-                    stackNodes[stackTop] = edge.to_node as number;
+                    stackNodes[stackTop] = edge.to_node;
                     visited.add(edge.to_node);
                 })
                 if(!hasNew) {
                     // Done with all the node children
-                    this.nodeId2PostOrderIndex[node.id as number] = postOrderIndex;
-                    this.postOrderIndex2NodeId[postOrderIndex++] = node.id as number;
+                    this.nodeId2PostOrderIndex[node.id] = postOrderIndex;
+                    this.postOrderIndex2NodeId[postOrderIndex++] = node.id;
                     --stackTop;
                 }
             }
@@ -339,14 +352,14 @@ export class V8SnapshotInfo {
             stackNodes[0] = this.root_id;
             for (let i = 0; i < nodeCount; ++i) {
                 const node = this.node_list[i];
-                if (visited.has(node.id) || !this.hasOnlyWeakRetainers(node.id as number)) {
+                if (visited.has(node.id) || !this.hasOnlyWeakRetainers(node.id)) {
                     continue;
                 }
                 // Add all nodes that have only weak retainers to traverse their subgraphs.
-                stackNodes[++stackTop] = node.id as number;
+                stackNodes[++stackTop] = node.id;
                 visited.add(node.id);
                 const retainers: string[] = [];
-                this.edges_to[node.id as number]?.forEach(edge => {
+                this.edges_to[node.id]?.forEach(edge => {
                     const node_from = this.nodes[edge.from_node];
                     retainers.push(`${node_from.name}@${node_from.id}.${edge.name_or_index}`);
                 })
@@ -369,7 +382,7 @@ export class V8SnapshotInfo {
                 errors.push(node.name + ' @' + node.id);
                 // Fix it by giving the node a postorder index anyway.
                 this.nodeId2PostOrderIndex[node.id] = postOrderIndex;
-                this.postOrderIndex2NodeId[postOrderIndex++] = node.id as number;
+                this.postOrderIndex2NodeId[postOrderIndex++] = node.id;
             }
             this.nodeId2PostOrderIndex[this.root_id] = postOrderIndex;
             this.postOrderIndex2NodeId[postOrderIndex++] = this.root_id;
@@ -409,7 +422,7 @@ export class V8SnapshotInfo {
 
         // Mark the root direct children as affected.
         this.edges[this.root_id]?.forEach(edge => {
-            if (!this.isEssentialEdge(this.root_id, edge.type as V8SnapshotEdgeTypes)) {
+            if (!this.isEssentialEdge(this.root_id, edge.type)) {
                 return;
             }
             affected[this.nodeId2PostOrderIndex[edge.to_node]] = 1;
@@ -429,17 +442,17 @@ export class V8SnapshotInfo {
                     continue;
                 }
                 node = this.nodes[this.postOrderIndex2NodeId[postOrderIndex]];
-                const nodeFlag = ((node.flag as number) & flag);
+                const nodeFlag = ((node.flag) & flag);
                 let newDominatorIndex: number = noEntry;
                 let orphanNode = true;
                 let node_from: V8SnapshotInfoNode;
                 this.edges_to[node.id]?.some(edge => {
                     node_from = this.nodes[edge.from_node];
-                    if (!this.isEssentialEdge(edge.from_node as number, edge.type as V8SnapshotEdgeTypes)) {
+                    if (!this.isEssentialEdge(edge.from_node, edge.type)) {
                         return false;
                     }
                     orphanNode = false;
-                    const retainerNodeFlag = ((node_from.flag as number) & flag);
+                    const retainerNodeFlag = ((node_from.flag) & flag);
                     // We are skipping the edges from non-page-owned nodes to page-owned nodes.
                     // Otherwise the dominators for the objects that also were retained by debugger would be affected.
                     if (node_from.id !== this.root_id && nodeFlag && !retainerNodeFlag) {
