@@ -4,7 +4,7 @@ import {
     V8SnapshotEdgeTypes,
     V8SnapshotNodeFields,
     V8SnapshotNodeTypes
-} from "./V8SnapshotTypes";
+} from './V8SnapshotTypes';
 
 export interface V8SnapshotInfoOptions {
     text: string;
@@ -13,7 +13,8 @@ export interface V8SnapshotInfoOptions {
 enum V8SnapshotInfoNodeFields {
     retained_size = "retained_size",
     distance = "distance",
-    flag = "flag"
+    flag = "flag",
+    idx = "idx"
 }
 
 enum V8SnapshotInfoEdgeFields {
@@ -25,9 +26,11 @@ export type V8SnapshotInfoNode = Record<V8SnapshotNodeFields | V8SnapshotInfoNod
     [V8SnapshotNodeFields.name]: string,
     [V8SnapshotNodeFields.type]: V8SnapshotNodeTypes,
     [V8SnapshotNodeFields.self_size]: number,
+    [V8SnapshotNodeFields.edge_count]: number,
     [V8SnapshotInfoNodeFields.retained_size]: number,
     [V8SnapshotInfoNodeFields.distance]: number,
     [V8SnapshotInfoNodeFields.flag]: number,
+    [V8SnapshotInfoNodeFields.idx]: number,
 };
 export type V8SnapshotInfoEdge = Record<V8SnapshotEdgeFields | V8SnapshotInfoEdgeFields, number | string> & {
     [V8SnapshotEdgeFields.type]: V8SnapshotEdgeTypes,
@@ -36,13 +39,23 @@ export type V8SnapshotInfoEdge = Record<V8SnapshotEdgeFields | V8SnapshotInfoEdg
     [V8SnapshotInfoEdgeFields.from_node]: number
 };
 
+interface V8SnapshotInfoAggregatedInfo{
+    count: number,
+    distance: number,
+    self: number,
+    maxRet: number,
+    type: V8SnapshotNodeTypes,
+    name: string | null,
+    idxs: number[],
+}
+
 // V8Snapshot基础信息
 export class V8SnapshotInfo {
     constructor(options: V8SnapshotInfoOptions) {
         this.init(options.text);
     }
 
-    public heap: V8Snapshot = null as any;
+    public snapshot: V8Snapshot = null as any;
     public node_list: V8SnapshotInfoNode[] = []; // [node_1, node_2, ...]
     public edge_list: V8SnapshotInfoEdge[] = []; // [edge_1, edge_2, ...]
     public nodes: Record<number | string, V8SnapshotInfoNode> = {}; // {[node_id]: node_info}
@@ -56,6 +69,8 @@ export class V8SnapshotInfo {
     public nodeId2PostOrderIndex: Record<number | string, number> = {};
     public postOrderIndex2NodeId: Uint32Array = new Uint32Array();
     public dominatorsTree: Record<number, number> = {};
+    public aggregatesByClassName: Record<string, V8SnapshotInfoAggregatedInfo> = {};
+    public aggregatesByClassIndex: Record<number, V8SnapshotInfoAggregatedInfo> = {};
     static ROOT_NODE_ID = 1;
     static NO_RETAINED_SIZE = -1;
     static NO_DISTANCE = 0;
@@ -67,14 +82,14 @@ export class V8SnapshotInfo {
     }
 
     // 初始化：分析V8Snapshot
-    init = (text: string) => {
+    private init = (text: string) => {
         try{
-            this.heap = JSON.parse(text);
+            this.snapshot = JSON.parse(text);
         } catch (e) {
             console.error("[V8SnapshotInfo] format snapshot error: ", e);
             throw new Error("could not format snapshot string")
         }
-        if(!this.heap){
+        if(!this.snapshot){
             return;
         }
         this.root_id = V8SnapshotInfo.ROOT_NODE_ID;
@@ -89,35 +104,37 @@ export class V8SnapshotInfo {
     }
 
     // 初始化：记录fields序号
-    initFieldsIndex = () => {
-        this.node_field_count = this.heap.snapshot.meta.node_fields.length;
-        this.edge_fields_count = this.heap.snapshot.meta.edge_fields.length;
-        this.heap.snapshot.meta.node_fields.forEach((node_field, idx) => {
+    private initFieldsIndex = () => {
+        this.node_field_count = this.snapshot.snapshot.meta.node_fields.length;
+        this.edge_fields_count = this.snapshot.snapshot.meta.edge_fields.length;
+        this.snapshot.snapshot.meta.node_fields.forEach((node_field, idx) => {
             this.node_fields_idx[node_field] = idx;
         });
-        this.heap.snapshot.meta.edge_fields.forEach((edge_field, idx) => {
+        this.snapshot.snapshot.meta.edge_fields.forEach((edge_field, idx) => {
             this.edge_fields_idx[edge_field] = idx;
         });
     }
 
     // 初始化：Node信息
-    initNodes = () => {
-        const node_count = this.heap.snapshot.node_count;
+    private initNodes = () => {
+        const node_count = this.snapshot.snapshot.node_count;
         let node: V8SnapshotInfoNode;
         for (let i = 0; i < node_count; ++i) {
-            node = this.getNode(i * this.node_field_count);
+            node = this.getNode(i);
             this.node_list.push(node);
             this.nodes[node.id] = node;
         }
     }
 
     // 获取node
-    getNode = (node_start: number): V8SnapshotInfoNode => {
-        const node_field = this.heap.snapshot.meta.node_fields;
+    private getNode = (node_idx: number): V8SnapshotInfoNode => {
+        const node_start = node_idx * this.node_field_count;
+        const node_field = this.snapshot.snapshot.meta.node_fields;
         const node: Partial<V8SnapshotInfoNode> = {
             retained_size: V8SnapshotInfo.NO_RETAINED_SIZE,
             distance: V8SnapshotInfo.NO_DISTANCE,
-            flag: 0
+            flag: 0,
+            idx: node_idx
         };
         for (let i = 0; i < this.node_field_count; ++i) {
             // todo name: concatenated string
@@ -131,17 +148,17 @@ export class V8SnapshotInfo {
     }
 
     // 获取node某个field值
-    getNodeField = (node_start: number, node_field_idx: number): number | string => {
-        const value = this.heap.nodes[node_start + node_field_idx];
-        const type = this.heap.snapshot.meta.node_types[node_field_idx];
-        if (type === V8SnapshotNodeTypes.string) return this.heap.strings[value];
+    private getNodeField = (node_start: number, node_field_idx: number): number | string => {
+        const value = this.snapshot.nodes[node_start + node_field_idx];
+        const type = this.snapshot.snapshot.meta.node_types[node_field_idx];
+        if (type === V8SnapshotNodeTypes.string) return this.snapshot.strings[value];
         if (type === V8SnapshotNodeTypes.number) return value;
         if (Array.isArray(type)) return type[value];
         throw new Error("unsupported node field type: " + type);
     }
 
     // 初始化：edges信息
-    initEdges = () => {
+    private initEdges = () => {
         let edge_start = 0;
         let edge: V8SnapshotInfoEdge;
         let from_node_id: number;
@@ -163,8 +180,8 @@ export class V8SnapshotInfo {
     }
 
     // 获取edge
-    getEdge = (edge_start: number, from_node: number): V8SnapshotInfoEdge => {
-        const edge_field = this.heap.snapshot.meta.edge_fields;
+    private getEdge = (edge_start: number, from_node: number): V8SnapshotInfoEdge => {
+        const edge_field = this.snapshot.snapshot.meta.edge_fields;
         const edge: Partial<V8SnapshotInfoEdge> = {
             from_node
         };
@@ -175,11 +192,11 @@ export class V8SnapshotInfo {
     }
 
     // 获取edge的field
-    getEdgeField = (edge_start: number, field_index: number): string | number => {
-        const value = this.heap.edges[edge_start + field_index];
-        const type = this.heap.snapshot.meta.edge_types[field_index];
+    private getEdgeField = (edge_start: number, field_index: number): string | number => {
+        const value = this.snapshot.edges[edge_start + field_index];
+        const type = this.snapshot.snapshot.meta.edge_types[field_index];
         if (type === V8SnapshotEdgeTypes.string_or_number) {
-            return this.heap.strings[value];
+            return this.snapshot.strings[value];
         } else if (type === V8SnapshotEdgeTypes.node) {
             return this.getNodeField(value, this.node_fields_idx[V8SnapshotNodeFields.id]);
         } else if (Array.isArray(type)) {
@@ -190,7 +207,7 @@ export class V8SnapshotInfo {
 
     // 初始化：对象自身大小加上它依赖链路上的所有对象的自身大小（Shallow size）之和
     // calculateRetainedSizes
-    calculateRetainedSizes = () => {
+    private calculateRetainedSizes = () => {
         const nodeCount = this.node_list.length;
         const dominatorsTree = this.dominatorsTree;
         for (let postOrderIndex = 0; postOrderIndex < nodeCount - 1; ++postOrderIndex) {
@@ -201,7 +218,7 @@ export class V8SnapshotInfo {
     }
 
     // 初始化：距离
-    initDistance = () => {
+    private initDistance = () => {
         const root_node = this.nodes[this.root_id];
         const nodesToVisit = new Array(this.node_list.length);
         let nodesToVisitLength = 0;
@@ -223,7 +240,7 @@ export class V8SnapshotInfo {
     }
 
     // 设置node距离
-    setNodeChildDistance = (nodesToVisit: V8SnapshotInfoNode[], nodesToVisitLength: number) => {
+    private setNodeChildDistance = (nodesToVisit: V8SnapshotInfoNode[], nodesToVisitLength: number) => {
         let index = 0;
         let node: V8SnapshotInfoNode;
         let node_to: V8SnapshotInfoNode;
@@ -243,7 +260,7 @@ export class V8SnapshotInfo {
     }
 
     // node距离过滤
-    nodesDistanceFilter = (node: V8SnapshotInfoNode, edge: V8SnapshotInfoEdge) => {
+    private nodesDistanceFilter = (node: V8SnapshotInfoNode, edge: V8SnapshotInfoEdge) => {
         if (node.type === V8SnapshotNodeTypes.hidden) {
             return edge.name_or_index !== 'sloppy_function_map' || node.name !== 'system / NativeContext';
         }
@@ -295,7 +312,7 @@ export class V8SnapshotInfo {
     }
 
     // 构建倒序序号
-    buildPostOrderIndex = () => {
+    private buildPostOrderIndex = () => {
         const nodeCount = this.node_list.length;
         this.postOrderIndex2NodeId = new Uint32Array(nodeCount);
 
@@ -391,7 +408,7 @@ export class V8SnapshotInfo {
     }
 
     // 基本必要edge
-    isEssentialEdge = (nodeId: number, edgeType: V8SnapshotEdgeTypes) => {
+    private isEssentialEdge = (nodeId: number, edgeType: V8SnapshotEdgeTypes) => {
         return edgeType !== V8SnapshotEdgeTypes.weak &&
           (edgeType !== V8SnapshotEdgeTypes.shortcut || nodeId === this.root_id);
     }
@@ -498,6 +515,143 @@ export class V8SnapshotInfo {
         for (let postOrderIndex = 0, l = dominators.length; postOrderIndex < l; ++postOrderIndex) {
             const nodeId = this.postOrderIndex2NodeId[postOrderIndex];
             this.dominatorsTree[nodeId] = this.postOrderIndex2NodeId[dominators[postOrderIndex]];
+        }
+    }
+
+    // private buildDominatedNodes = () => {
+    //     // Builds up two arrays:
+    //     //  - "dominatedNodes" is a continuous array, where each node owns an
+    //     //    interval (can be empty) with corresponding dominated nodes.
+    //     //  - "indexArray" is an array of indexes in the "dominatedNodes"
+    //     //    with the same positions as in the _nodeIndex.
+    //     const indexArray = this.firstDominatedNodeIndex; // new Uint32Array(this.nodeCount + 1)
+    //     // All nodes except the root have dominators.
+    //     const dominatedNodes = this.dominatedNodes; // new Uint32Array(this.nodeCount - 1);
+    //
+    //     // Count the number of dominated nodes for each node. Skip the root (node at
+    //     // index 0) as it is the only node that dominates itself.
+    //     const dominatorsTree = this.dominatorsTree;
+    //
+    //     let fromNodeOrdinal = 0;
+    //     let toNodeOrdinal: number = this.nodeCount;
+    //     const rootNodeOrdinal = this.rootNodeIndexInternal / nodeFieldCount;
+    //     if (rootNodeOrdinal === fromNodeOrdinal) {
+    //         fromNodeOrdinal = 1;
+    //     } else if (rootNodeOrdinal === toNodeOrdinal - 1) {
+    //         toNodeOrdinal = toNodeOrdinal - 1;
+    //     } else {
+    //         throw new Error('Root node is expected to be either first or last');
+    //     }
+    //     for (let nodeOrdinal = fromNodeOrdinal; nodeOrdinal < toNodeOrdinal; ++nodeOrdinal) {
+    //         ++indexArray[dominatorsTree[nodeOrdinal]];
+    //     }
+    //     // Put in the first slot of each dominatedNodes slice the count of entries
+    //     // that will be filled.
+    //     let firstDominatedNodeIndex = 0;
+    //     for (let i = 0, l = this.nodeCount; i < l; ++i) {
+    //         const dominatedCount = dominatedNodes[firstDominatedNodeIndex] = indexArray[i];
+    //         indexArray[i] = firstDominatedNodeIndex;
+    //         firstDominatedNodeIndex += dominatedCount;
+    //     }
+    //     indexArray[this.nodeCount] = dominatedNodes.length;
+    //     // Fill up the dominatedNodes array with indexes of dominated nodes. Skip the root (node at
+    //     // index 0) as it is the only node that dominates itself.
+    //     for (let nodeOrdinal = fromNodeOrdinal; nodeOrdinal < toNodeOrdinal; ++nodeOrdinal) {
+    //         const dominatorOrdinal = dominatorsTree[nodeOrdinal];
+    //         let dominatedRefIndex = indexArray[dominatorOrdinal];
+    //         dominatedRefIndex += (--dominatedNodes[dominatedRefIndex]);
+    //         dominatedNodes[dominatedRefIndex] = nodeOrdinal * nodeFieldCount;
+    //     }
+    // }
+
+    // 统计类数量
+    private getAggregatesByClassName = () => {}
+
+    // 统计类数量
+    private buildAggregates = (filter?: ((node: V8SnapshotInfoNode) => boolean)) => {
+        const classIndexes = [];
+
+        this.node_list.forEach((node, index) => {
+            if (filter && !filter(node)) {
+                return;
+            }
+            if (!node.self_size && node.type !== V8SnapshotNodeTypes.native) {
+                return;
+            }
+            const classIndex = this.getNodeClassIndex(index);
+            if(!(classIndex in this.aggregatesByClassIndex)){
+                // 新增
+                const value: V8SnapshotInfoAggregatedInfo = {
+                    count: 1,
+                    distance: node[V8SnapshotInfoNodeFields.distance],
+                    self: node[V8SnapshotNodeFields.self_size],
+                    maxRet: 0,
+                    type: node.type,
+                    name: node.type === V8SnapshotNodeTypes.object || node.type === V8SnapshotNodeTypes.native ? node.name : null,
+                    idxs: [index],
+                };
+                this.aggregatesByClassIndex[classIndex] = value;
+                classIndexes.push(classIndex);
+                this.aggregatesByClassName[node.name] = value;
+            } else {
+                // 已有
+                const clss = this.aggregatesByClassIndex[classIndex];
+                if (!clss) {
+                    return;
+                }
+                clss.distance = Math.min(clss.distance, node.distance);
+                ++clss.count;
+                clss.self += node.self_size;
+                clss.idxs.push(index);
+            }
+        });
+    }
+
+    // private calculateClassesRetainedSize = (filter?: ((node: V8SnapshotInfoNode) => boolean)) => {
+    //     const list: number[] = [this.root_id];
+    //     const sizes = [-1];
+    //     const classes = [];
+    //
+    //     const seenClassNameIndexes = new Set();
+    //     let node: V8SnapshotInfoNode;
+    //
+    //     while (list.length) {
+    //         const nodeId= (list.pop());
+    //         let classIndex = node.classIndex();
+    //         const seen = (seenClassNameIndexes.has(classIndex));
+    //         const dominatedIndexFrom = firstDominatedNodeIndex[nodeOrdinal];
+    //         const dominatedIndexTo = firstDominatedNodeIndex[nodeOrdinal + 1];
+    //
+    //         if (!seen && (!filter || filter(node)) &&
+    //           (node.self_size || node.type === V8SnapshotNodeTypes.native)) {
+    //             this.aggregatesByClassIndex[classIndex].maxRet += node.retained_size;
+    //             if (dominatedIndexFrom !== dominatedIndexTo) {
+    //                 seenClassNameIndexes.add(classIndex);
+    //                 sizes.push(list.length);
+    //                 classes.push(classIndex);
+    //             }
+    //         }
+    //         for (let i = dominatedIndexFrom; i < dominatedIndexTo; i++) {
+    //             list.push(this.dominatedNodes[i]);
+    //         }
+    //
+    //         const l = list.length;
+    //         while (sizes[sizes.length - 1] === l) {
+    //             sizes.pop();
+    //             classIndex = (classes.pop() as number);
+    //             seenClassNameIndexes.delete(classIndex);
+    //         }
+    //     }
+    // }
+
+    // 获取class名称序号
+    private getNodeClassIndex = (nodeIndex: number) => {
+        const node = this.node_list[nodeIndex];
+        const type = node[V8SnapshotNodeFields.type];
+        if(type === V8SnapshotNodeTypes.object || type === V8SnapshotNodeTypes.native){
+            return this.snapshot.nodes[nodeIndex * this.node_field_count + this.node_fields_idx[V8SnapshotNodeFields.name]]
+        }else{
+            return -1 - this.snapshot.nodes[nodeIndex * this.node_field_count + this.node_fields_idx[V8SnapshotNodeFields.type]]
         }
     }
 }
