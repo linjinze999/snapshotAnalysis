@@ -1,5 +1,5 @@
-import {V8SnapshotInfo, V8SnapshotInfoNode} from "./V8SnapshotInfo";
-import {V8SnapshotEdgeTypes, V8SnapshotNodeTypes} from "./V8SnapshotTypes";
+import { V8SnapshotInfo, V8SnapshotInfoNode } from './V8SnapshotInfo';
+import { V8SnapshotEdgeTypes, V8SnapshotNodeTypes } from './V8SnapshotTypes';
 
 export interface SnapshotOptions{
   text: string;
@@ -7,14 +7,15 @@ export interface SnapshotOptions{
 
 export class V8Snapshot {
   constructor(options: SnapshotOptions) {
-    this.options = Object.assign({}, this.options, V8Snapshot.DEFAULT_OPTIONS, options);
-    this.snapshot_info = new V8SnapshotInfo({text: this.options.text});
+    this.options = { ...this.options, ...V8Snapshot.DEFAULT_OPTIONS, ...options };
+    this.snapshot_info = new V8SnapshotInfo({ text: this.options.text });
   }
 
-  static DEFAULT_OPTIONS: SnapshotOptions = {text: ""};
-  private readonly options: SnapshotOptions = {} as any;
-  public snapshot_info: V8SnapshotInfo;
+  static DEFAULT_OPTIONS: SnapshotOptions = { text: '' };
 
+  private readonly options: SnapshotOptions = {} as any;
+
+  public snapshot_info: V8SnapshotInfo;
 
   // 统计数据
   public calculateStatistics = () => {
@@ -24,35 +25,35 @@ export class V8Snapshot {
       code: 0, // 代码
       string: 0, // 字符串
       array: 0, // js数组
-      system: 0 // 系统对象
-    }
+      system: 0, // 系统对象
+    };
     let nodeSize: number;
-    this.snapshot_info.node_list.forEach(node => {
+    this.snapshot_info.node_list.forEach((node) => {
       nodeSize = node.self_size as number;
       size.total += nodeSize;
-      if(node.distance >= V8SnapshotInfo.BASE_SYSTEM_DISTANCE){
+      if (node.distance >= V8SnapshotInfo.BASE_SYSTEM_DISTANCE) {
         size.system += nodeSize;
-      } else if(node.type === V8SnapshotNodeTypes.native){
+      } else if (node.type === V8SnapshotNodeTypes.native) {
         size.native += nodeSize;
-      } else if(node.type === V8SnapshotNodeTypes.code){
+      } else if (node.type === V8SnapshotNodeTypes.code) {
         size.code += nodeSize;
-      } else if(([V8SnapshotNodeTypes.string, V8SnapshotNodeTypes.concatenated_string, V8SnapshotNodeTypes.sliced_string]).includes(node.type as V8SnapshotNodeTypes)){
+      } else if (([V8SnapshotNodeTypes.string, V8SnapshotNodeTypes.concatenated_string, V8SnapshotNodeTypes.sliced_string]).includes(node.type as V8SnapshotNodeTypes)) {
         size.string += nodeSize;
-      } else if(node.name === "Array"){
+      } else if (node.name === 'Array') {
         size.array += this.calculateArraySize(node);
       }
     });
-    return size
-  }
+    return size;
+  };
 
   // 计算数组大小
   public calculateArraySize = (node: V8SnapshotInfoNode) => {
     let size = node.self_size as number;
-    this.snapshot_info.edges[node.id]?.some(edge => {
-      if(edge.type !== V8SnapshotEdgeTypes.internal){
+    this.snapshot_info.edges[node.id]?.some((edge) => {
+      if (edge.type !== V8SnapshotEdgeTypes.internal) {
         return false;
       }
-      if(edge.name_or_index !== 'elements'){
+      if (edge.name_or_index !== 'elements') {
         return false;
       }
       const node_to = this.snapshot_info.nodes[edge.to_node];
@@ -60,9 +61,9 @@ export class V8Snapshot {
         size += (node_to.self_size as number);
       }
       return true;
-    })
+    });
     return size;
-  }
+  };
 }
 
-export default V8Snapshot
+export default V8Snapshot;
