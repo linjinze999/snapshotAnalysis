@@ -24,12 +24,12 @@ module.exports = {
         lastUpdated: '上次更新',
         nav: [
           {
-            text: '分析',
-            link: '/analysis/',
+            text: 'V8(Chrome)',
+            link: '/V8/',
           },
           {
-            text: '文档',
-            link: '/guide/',
+            text: 'JSC(Safari)',
+            link: '/JSC/',
           }
         ],
         sidebar: 'auto'
