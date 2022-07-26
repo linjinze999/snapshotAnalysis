@@ -14,8 +14,8 @@ module.exports = {
     repo: 'linjinze999/snapshotAnalysis',
     docsRepo: 'linjinze999/snapshotAnalysis',
     docsDir: 'vuepress',
-    editLinks: true,
-    sidebarDepth: 0,
+    // editLinks: true,
+    // sidebarDepth: 0,
     locales: {
       '/': {
         label: '简体中文',
@@ -32,7 +32,34 @@ module.exports = {
             link: '/JSC/',
           }
         ],
-        sidebar: 'auto'
+        sidebar: {
+          '/V8/': [
+            {
+              title: '堆快照',
+              collapsable: false,
+              children: [
+                'snapshot/summary',
+                'snapshot/comparison',
+                'snapshot/containment',
+                'snapshot/statistics',
+              ]
+            },
+            {
+              title: '时间轴上的分配插桩',
+              collapsable: false,
+              children: [
+                '',
+              ]
+            },
+            {
+              title: '分配采样',
+              collapsable: false,
+              children: [
+                '',
+              ]
+            },
+          ]
+        }
       }
     }
   }

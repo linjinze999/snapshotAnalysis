@@ -1,5 +1,6 @@
 ---
 home: true
+heroImage: /hero.png
 heroText: snapshotAnalysis
 tagline: 用于分析JS引擎生成的堆内存快照文件。
 footer: MIT Licensed | Copyright © 2022-personal linjinze999
