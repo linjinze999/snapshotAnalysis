@@ -1,25 +1,33 @@
+import V8SnapshotExample from "../example/kg_qq_com.js"
+import { V8Snapshot } from "../../../dist/index"
+
 export default {
   namespaced: true,
   state: () => {
-    list: [{name: "test.snapshot"}]
+    return {
+      snapshotList: [
+        {
+          name: "示例.heapsnapshot",
+          snapshot: new V8Snapshot({text: JSON.stringify(V8SnapshotExample)})
+        }
+      ]
+    }
   },
   getters: {
-    fileList: (state, getters, rootState) => {
+    fileListTemp: (state, getters, rootState) => {
       return [];
     }
   },
   mutations: {
     addSnapshot (state, { id }) {
-      state.list.push({
+      state.snapshotList.push({
         id,
         quantity: 1
       })
     }
   },
   actions: {
-    checkout ({ commit, state }, products) {
-      const savedCartItems = [...state.items]
-      // empty cart
+    addSnapshot ({ commit, state }, products) {
       commit('addSnapshot', { items: [] })
     }
   },

@@ -1,12 +1,14 @@
 <template>
   <div>
     测试：
-    {{list.length}}
+    {{snapshotList.length}}
+    {{snapshotList[0].snapshot.calculateStatistics()}}
   </div>
 </template>
 
 <script>
-import { mapState, mapActions } from 'vuex';
+import { createNamespacedHelpers } from 'vuex';
+const { mapState, mapActions } = createNamespacedHelpers('V8Snapshot')
 
 export default {
   name: 'V8SnapshotFiles',
@@ -19,7 +21,7 @@ export default {
   },
   computed: {
     ...mapState({
-      list: state => state.V8Snapshot.list
+      snapshotList: state => state.snapshotList
     })
   },
   methods: {

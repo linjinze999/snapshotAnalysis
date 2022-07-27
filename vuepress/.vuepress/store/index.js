@@ -1,8 +1,7 @@
-import Vuex from 'vuex';
 import V8Snapshot from './V8Snapshot';
 
-export default new Vuex.Store({
+export default {
   modules: {
     V8Snapshot
   }
-})
+}
