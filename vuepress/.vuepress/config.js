@@ -62,5 +62,13 @@ module.exports = {
         }
       }
     }
-  }
+  },
+  // configureWebpack: {
+  //   resolve: {extensions: [".ts"]},
+  //   module: {
+  //     rules: [
+  //       {test: /\.ts$/, loader: "ts-loader"}
+  //     ]
+  //   }
+  // }
 };

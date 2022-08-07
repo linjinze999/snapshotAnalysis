@@ -1,7 +1,15 @@
 <template>
   <div class="snapshot-list">
     <input type="file" accept=".heapsnapshot" ref="input" class="input" @change="onInput" />
-    <div v-for="item in snapshotList" :key="item.name" class="item">
+    <div
+        v-for="item in snapshotList"
+        :key="item.name"
+        class="item"
+        :class="{active: item.id === activeSnapshot.id}"
+        v-loading="item.progress < 1"
+        :element-loading-text="item.progressText"
+        @click="updateActive(item)"
+    >
       {{item.name}}
     </div>
     <i class="el-icon-plus item add" @click="showInput"></i>
@@ -12,7 +20,7 @@
 <script>
 import { createNamespacedHelpers } from 'vuex';
 import { readFiles } from '../../utils/files';
-const { mapState, mapActions } = createNamespacedHelpers('V8Snapshot')
+const { mapState, mapGetters, mapActions } = createNamespacedHelpers('V8Snapshot')
 
 export default {
   name: 'V8SnapshotFiles',
@@ -25,8 +33,9 @@ export default {
   },
   computed: {
     ...mapState({
-      snapshotList: state => state.snapshotList
-    })
+      snapshotList: state => state.snapshotList,
+    }),
+    ...mapGetters(["activeSnapshot"])
   },
   methods: {
     showInput(){
@@ -42,7 +51,10 @@ export default {
     onRemove(file) {
       console.log(file);
     },
-    ...mapActions(["addSnapshot"])
+    updateActive(snapshot){
+      this.updateActiveSnapshot(snapshot);
+    },
+    ...mapActions(["addSnapshot", "updateActiveSnapshot"])
   }
 };
 </script>
@@ -70,7 +82,7 @@ export default {
     padding: 10px;
     word-break: break-all;
 
-    &:hover, &:focus, .active{
+    &:hover, &:focus, &.active{
       border-color: #409eff;
       color: #409eff;
     }

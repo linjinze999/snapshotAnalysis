@@ -1,9 +1,13 @@
-import { V8SnapshotInfo, V8SnapshotInfoNode, V8SnapshotProcessParams } from './V8SnapshotInfo';
+import {
+  V8SnapshotInfo,
+  V8SnapshotInfoNode,
+  V8SnapshotProgressParams
+} from './V8SnapshotInfo';
 import { V8SnapshotEdgeTypes, V8SnapshotNodeTypes } from './V8SnapshotTypes';
 
 export interface SnapshotOptions{
   text: string;
-  processCallback?: (params: V8SnapshotProcessParams) => void;
+  progressCallback?: (params: V8SnapshotProgressParams) => void;
 }
 
 export class V8Snapshot {
@@ -11,7 +15,7 @@ export class V8Snapshot {
     this.options = { ...this.options, ...V8Snapshot.DEFAULT_OPTIONS, ...options };
     this.snapshot_info = new V8SnapshotInfo({
       text: this.options.text,
-      processCallback: this.options.processCallback
+      progressCallback: this.options.progressCallback
     });
   }
 
