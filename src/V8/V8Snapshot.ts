@@ -1,14 +1,18 @@
-import { V8SnapshotInfo, V8SnapshotInfoNode } from './V8SnapshotInfo';
+import { V8SnapshotInfo, V8SnapshotInfoNode, V8SnapshotProcessParams } from './V8SnapshotInfo';
 import { V8SnapshotEdgeTypes, V8SnapshotNodeTypes } from './V8SnapshotTypes';
 
 export interface SnapshotOptions{
   text: string;
+  processCallback?: (params: V8SnapshotProcessParams) => void;
 }
 
 export class V8Snapshot {
   constructor(options: SnapshotOptions) {
     this.options = { ...this.options, ...V8Snapshot.DEFAULT_OPTIONS, ...options };
-    this.snapshot_info = new V8SnapshotInfo({ text: this.options.text });
+    this.snapshot_info = new V8SnapshotInfo({
+      text: this.options.text,
+      processCallback: this.options.processCallback
+    });
   }
 
   static DEFAULT_OPTIONS: SnapshotOptions = { text: '' };

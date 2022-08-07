@@ -7,7 +7,8 @@ import {
 } from './V8SnapshotTypes';
 
 export interface V8SnapshotInfoOptions {
-    text: string;
+  text: string;
+  processCallback?: (params: V8SnapshotProcessParams) => void;
 }
 
 export enum V8SnapshotInfoNodeFields {
@@ -54,9 +55,15 @@ interface V8SnapshotInfoAggregatedInfo{
     idxs: number[],
 }
 
+export interface V8SnapshotProcessParams {
+  process: number;
+  text: string;
+}
+
 // V8Snapshot基础信息
 export class V8SnapshotInfo {
   constructor(options: V8SnapshotInfoOptions) {
+    this.options = options;
     this.init(options.text);
   }
 
@@ -110,6 +117,8 @@ export class V8SnapshotInfo {
     pageObject: 4,
   };
 
+  private options: V8SnapshotInfoOptions;
+
   // 初始化：分析V8Snapshot
   private init = (text: string) => {
     try {
@@ -122,17 +131,76 @@ export class V8SnapshotInfo {
       return;
     }
     this.root_id = V8SnapshotInfo.ROOT_NODE_ID;
-    this.initFieldsIndex();
-    this.initNodes();
-    this.initEdges();
-    this.calculateFlags();
-    this.buildPostOrderIndex();
-    this.buildDominatorTree();
-    this.calculateRetainedSizes();
-    this.buildDominatedNodes();
-    this.initDistance();
-    this.buildAggregates();
-    this.calculateClassesRetainedSize();
+    // 初始化任务列表
+    const initTasks: {process: number, text: string, fn: () => void}[] = [
+      {
+        process: 0,
+        text: "开始解析...",
+        fn: this.initFieldsIndex,
+      },
+      {
+        process: 0.09,
+        text: "初始化节点数据...",
+        fn: this.initNodes
+      },
+      {
+        process: 0.18,
+        text: "初始化结构数据...",
+        fn: this.initEdges,
+      },
+      {
+        process: 0.27,
+        text: "初始化节点标记...",
+        fn: this.calculateFlags,
+      },
+      {
+        process: 0.36,
+        text: "初始化倒序树...",
+        fn: this.buildPostOrderIndex,
+      },
+      {
+        process: 0.45,
+        text: "初始化支配树...",
+        fn: this.buildDominatorTree,
+      },
+      {
+        process: 0.54,
+        text: "初始化节点保留大小...",
+        fn: this.calculateRetainedSizes,
+      },
+      {
+        process: 0.63,
+        text: "初始化支配节点...",
+        fn: this.buildDominatedNodes,
+      },
+      {
+        process: 0.72,
+        text: "初始化节点根距离...",
+        fn: this.initDistance,
+      },
+      {
+        process: 0.81,
+        text: "初始化类合集...",
+        fn: this.buildAggregates,
+      },
+      {
+        process: 0.9,
+        text: "初始化类保留大小...",
+        fn: this.calculateClassesRetainedSize
+      },
+    ];
+    // 执行初始化任务
+    initTasks.forEach(task => {
+      this.options.processCallback?.({
+        process: task.process,
+        text: task.text
+      });
+      task.fn();
+    })
+    this.options.processCallback?.({
+      process: 1,
+      text: "初始化完成"
+    });
   };
 
   // 初始化：记录fields序号
