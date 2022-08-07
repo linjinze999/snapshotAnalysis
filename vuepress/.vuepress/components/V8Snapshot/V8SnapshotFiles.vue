@@ -15,6 +15,7 @@
           @click="updateActive(item)"
       >
         {{item.name}}
+        <i v-if="item.id !== 1" class="el-icon-delete delete" @click="onRemove(item)"></i>
       </div>
       <i class="el-icon-plus item add" @click="showInput"></i>
     </div>
@@ -52,13 +53,19 @@ export default {
         this.$message.error('读取文件出错');
       })
     },
-    onRemove(file) {
-      console.log(file);
+    onRemove(snapshot) {
+      this.$confirm(`是否删除《${snapshot.name}》`, '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        this.removeSnapshot({snapshotList: [snapshot]});
+      }).catch(() => {});
     },
     updateActive(snapshot){
       this.updateActiveSnapshot(snapshot);
     },
-    ...mapActions(["addSnapshot", "updateActiveSnapshot"])
+    ...mapActions(["addSnapshot", "updateActiveSnapshot", "removeSnapshot"])
   }
 };
 </script>
@@ -73,6 +80,7 @@ export default {
     display: none;
   }
   .item {
+    position: relative;
     border: 1px dashed #c0ccda;
     border-radius: 6px;
     box-sizing: border-box;
@@ -89,6 +97,20 @@ export default {
     &:hover, &:focus, &.active{
       border-color: #409eff;
       color: #409eff;
+    }
+
+    .delete {
+      color: #8c939d;
+      position: absolute;
+      right: 0;
+      top: 0;
+      padding: 5px;
+      border-radius: 5px;
+
+      &:hover{
+        color: #fff;
+        background-color: #F56C6C;
+      }
     }
   }
 

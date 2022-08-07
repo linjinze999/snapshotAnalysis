@@ -1,5 +1,5 @@
 import V8SnapshotExample from "../example/kg_qq_com.js"
-import { V8Snapshot } from "../../../dist/index"
+import { V8Snapshot } from "../../../src/index"
 import { Message } from 'element-ui';
 
 let idIndex = 1;
@@ -28,6 +28,9 @@ export default {
   mutations: {
     addSnapshot (state, { snapshotList }) {
       state.snapshotList = state.snapshotList.concat(snapshotList);
+      if(state.snapshotList.length){
+        state.activeId = state.snapshotList[state.snapshotList.length - 1].id
+      }
     },
     updateSnapshot (state, { snapshotMap }) {
       state.snapshotList = state.snapshotList.map(snapshot => {
@@ -39,6 +42,9 @@ export default {
     },
     removeSnapshot(state, { snapshotList }) {
       state.snapshotList = state.snapshotList.filter(v => !snapshotList.some(s => s.id === v.id));
+      if(snapshotList.some(item => item.id === state.activeId && state.snapshotList.length)){
+        state.activeId = state.snapshotList[state.snapshotList.length - 1].id
+      }
     },
     updateActiveSnapshot(state, { id }) {
       state.activeId = id;
@@ -96,6 +102,9 @@ export default {
     },
     updateActiveSnapshot ({ commit, state }, snapshot) {
       commit('updateActiveSnapshot', snapshot);
+    },
+    removeSnapshot ({ commit, state }, {snapshotList}) {
+      commit('removeSnapshot', { snapshotList });
     }
   }
 }
