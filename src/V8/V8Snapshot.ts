@@ -34,6 +34,7 @@ export class V8Snapshot {
       string: 0, // 字符串
       array: 0, // js数组
       system: 0, // 系统对象
+      others: 0 // 其他
     };
     let nodeSize: number;
     this.snapshot_info.node_list.forEach((node) => {
@@ -49,6 +50,8 @@ export class V8Snapshot {
         size.string += nodeSize;
       } else if (node.name === 'Array') {
         size.array += this.calculateArraySize(node);
+      } else {
+        size.others += nodeSize;
       }
     });
     return size;

@@ -1,26 +1,30 @@
 <template>
-  <div class="snapshot-list">
-    <input type="file" accept=".heapsnapshot" ref="input" class="input" @change="onInput" />
-    <div
-        v-for="item in snapshotList"
-        :key="item.name"
-        class="item"
-        :class="{active: item.id === activeSnapshot.id}"
-        v-loading="item.progress < 1"
-        :element-loading-text="item.progressText"
-        @click="updateActive(item)"
-    >
-      {{item.name}}
+  <div>
+    <div style="font-weight: bold; border-bottom: 1px solid #dcdfe6;padding-bottom: 10px;margin: 10px;">
+      当前快照：
     </div>
-    <i class="el-icon-plus item add" @click="showInput"></i>
-    {{snapshotList[0].snapshot.calculateStatistics()}}
+    <div class="snapshot-list">
+      <input type="file" accept=".heapsnapshot" ref="input" class="input" @change="onInput" />
+      <div
+          v-for="item in snapshotList"
+          :key="item.name"
+          class="item"
+          :class="{active: item.id === activeSnapshot.id}"
+          v-loading="item.progress < 1"
+          :element-loading-text="item.progressText"
+          @click="updateActive(item)"
+      >
+        {{item.name}}
+      </div>
+      <i class="el-icon-plus item add" @click="showInput"></i>
+    </div>
   </div>
 </template>
 
 <script>
 import { createNamespacedHelpers } from 'vuex';
 import { readFiles } from '../../utils/files';
-const { mapState, mapGetters, mapActions } = createNamespacedHelpers('V8Snapshot')
+const { mapState, mapGetters, mapActions } = createNamespacedHelpers('V8Snapshot');
 
 export default {
   name: 'V8SnapshotFiles',
